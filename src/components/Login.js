@@ -1,49 +1,76 @@
 import React, { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import './Login.css';
+
+// Supabase client
+const supabaseUrl = 'https://zunrhemhtbslfythqzsi.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1bnJoZW1odGJzbGZ5dGhxenNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MjI3NjQsImV4cCI6MjA2OTM5ODc2NH0.L_T2TPTOqSjAseU623yYETWDcrxbf1S2IrsEZkeUgZg';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const Login = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({
-    username: '',
+    email: '',
     password: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Demo credentials - Production'da bu bilgiler backend'den gelecek
-  const validCredentials = {
-    admin: 'locat2025',
-    demo: 'demo123',
-    tracker: 'track2025'
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const { email, password } = credentials;
 
-    const { username, password } = credentials;
+    try {
+      // Supabase Auth ile giriş yap
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
 
-    if (validCredentials[username] && validCredentials[username] === password) {
-      // Login başarılı
-      const userData = {
-        username,
-        role: username === 'admin' ? 'admin' : 'viewer',
-        loginTime: new Date().toISOString()
-      };
+      if (error) {
+        throw error;
+      }
+
+      if (data.user && data.session) {
+        // Login başarılı
+        const userData = {
+          id: data.user.id,
+          email: data.user.email,
+          username: data.user.email.split('@')[0],
+          role: 'admin', // Tüm giriş yapan kullanıcılar admin olarak kabul edilsin
+          loginTime: new Date().toISOString(),
+          accessToken: data.session.access_token,
+          refreshToken: data.session.refresh_token
+        };
+        
+        // LocalStorage'a kaydet
+        localStorage.setItem('locat_auth', JSON.stringify(userData));
+        localStorage.setItem('locat_auth_token', data.session.access_token);
+        
+        onLogin(userData);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
       
-      // LocalStorage'a kaydet
-      localStorage.setItem('locat_auth', JSON.stringify(userData));
-      localStorage.setItem('locat_auth_token', btoa(`${username}:${password}:${Date.now()}`));
+      // Kullanıcı dostu hata mesajları
+      let errorMessage = 'Giriş yapılırken bir hata oluştu';
       
-      onLogin(userData);
-    } else {
-      setError('Geçersiz kullanıcı adı veya şifre');
+      if (err.message.includes('Invalid login credentials')) {
+        errorMessage = 'Geçersiz email veya şifre';
+      } else if (err.message.includes('Email not confirmed')) {
+        errorMessage = 'Email adresinizi doğrulamanız gerekiyor';
+      } else if (err.message.includes('Too many requests')) {
+        errorMessage = 'Çok fazla deneme yapıldı, lütfen daha sonra tekrar deneyin';
+      } else if (err.message.includes('Invalid email')) {
+        errorMessage = 'Geçersiz email formatı';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleChange = (e) => {
@@ -72,15 +99,15 @@ const Login = ({ onLogin }) => {
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">Kullanıcı Adı</label>
+            <label htmlFor="email">Email</label>
             <input
-              type="text"
-              id="username"
-              name="username"
-              value={credentials.username}
+              type="email"
+              id="email"
+              name="email"
+              value={credentials.email}
               onChange={handleChange}
               required
-              placeholder="Kullanıcı adınızı girin"
+              placeholder="Email adresinizi girin"
               disabled={loading}
             />
           </div>
@@ -123,18 +150,11 @@ const Login = ({ onLogin }) => {
         </form>
 
         <div className="login-footer">
-          <div className="demo-credentials">
-            <h4>Demo Hesapları:</h4>
-            <div className="demo-accounts">
-              <div className="demo-account">
-                <strong>admin</strong> / locat2025
-              </div>
-              <div className="demo-account">
-                <strong>demo</strong> / demo123
-              </div>
-              <div className="demo-account">
-                <strong>tracker</strong> / track2025
-              </div>
+          <div className="login-info">
+            <h4>ℹ️ Giriş Bilgisi</h4>
+            <p>LocAt mobil uygulamasında kayıtlı olan email ve şifrenizi kullanarak giriş yapabilirsiniz.</p>
+            <div className="info-note">
+              <strong>Not:</strong> Henüz hesabınız yoksa, önce LocAt mobil uygulamasından kayıt olmanız gerekmektedir.
             </div>
           </div>
         </div>

@@ -205,32 +205,38 @@
   padding-top: 1.5rem;
 }
 
-.demo-credentials h4 {
+.login-info h4 {
   color: #666;
   font-size: 0.9rem;
   margin-bottom: 1rem;
   text-align: center;
   font-weight: 600;
-}
-
-.demo-accounts {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
 }
 
-.demo-account {
-  background: #f8f9fa;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+.login-info p {
   font-size: 0.85rem;
   color: #555;
   text-align: center;
-  border: 1px solid #e9ecef;
+  line-height: 1.5;
+  margin-bottom: 1rem;
 }
 
-.demo-account strong {
-  color: #333;
+.info-note {
+  background: #e3f2fd;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #1565c0;
+  text-align: center;
+  border-left: 4px solid #2196f3;
+}
+
+.info-note strong {
+  color: #0d47a1;
   font-weight: 600;
 }
 

@@ -45,12 +45,44 @@ function App() {
       // Kullanıcıları grupla ve en son konumlarını al
       const userMap = new Map();
       
+      // Kullanıcı email bilgilerini al
+      const userEmailMap = new Map();
+      
+      // Benzersiz user ID'leri topla
+      const userIds = [...new Set((data || []).map(location => location.user_id))];
+      
+      // Her user ID için email bilgisini almaya çalış
+      for (const userId of userIds) {
+        try {
+          // RPC fonksiyonu ile user email'ini al
+          const { data: userEmail, error: emailError } = await supabase
+            .rpc('get_user_email', { user_uuid: userId });
+          
+          if (!emailError && userEmail) {
+            // Email'in @ işaretinden önceki kısmını al
+            const emailPrefix = userEmail.split('@')[0];
+            userEmailMap.set(userId, emailPrefix);
+          } else {
+            // Email alınamazsa, user ID'nin kısa formatını kullan
+            const shortId = userId.substring(0, 8);
+            userEmailMap.set(userId, `User_${shortId}`);
+          }
+        } catch (error) {
+          console.log(`User ${userId} email alınamadı:`, error);
+          // Hata durumunda fallback isim
+          const shortId = userId.substring(0, 8);
+          userEmailMap.set(userId, `User_${shortId}`);
+        }
+      }
+
       (data || []).forEach(location => {
         const userId = location.user_id;
         if (!userMap.has(userId) || new Date(location.updated_at) > new Date(userMap.get(userId).updated_at)) {
+          // Email prefix'i varsa kullan, yoksa User_XXXXXXXX formatını kullan
+          const userName = userEmailMap.get(userId) || `User_${userId.substring(0, 8)}`;
           userMap.set(userId, {
             id: userId,
-            name: `Kullanıcı ${userId.substring(0, 8)}`,
+            name: userName,
             latitude: location.latitude,
             longitude: location.longitude,
             updated_at: location.updated_at,
