@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading }) => {
+const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, user, onLogout }) => {
   const formatTime = (date) => {
     if (!date) return 'Hiç';
     return date.toLocaleTimeString('tr-TR', {
@@ -55,6 +55,22 @@ const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading })
             />
             <label htmlFor="auto-refresh">Otomatik Yenile (30s)</label>
           </div>
+
+          {user && (
+            <div className="user-info">
+              <div className="user-details">
+                <span className="user-name">👤 {user.username}</span>
+                <span className="user-role">({user.role})</span>
+              </div>
+              <button 
+                className="logout-btn" 
+                onClick={onLogout}
+                title="Çıkış Yap"
+              >
+                🚪 Çıkış
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

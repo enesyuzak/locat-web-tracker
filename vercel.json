@@ -2,13 +2,17 @@
   "name": "locat-web-tracker",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/locat",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/locat/(.*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "source": "/static/(.*)",
+      "source": "/locat/static/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -17,7 +21,7 @@
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/locat/(.*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",

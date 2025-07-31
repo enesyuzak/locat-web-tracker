@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import MapComponent from './components/MapComponent';
 import UserList from './components/UserList';
 import Header from './components/Header';
+import Login from './components/Login';
+import useAuth from './hooks/useAuth';
 import './index.css';
 
 // Supabase yapılandırması
@@ -12,6 +14,7 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 function App() {
+  const { user, loading: authLoading, login, logout, isAuthenticated } = useAuth();
   const [locations, setLocations] = useState([]);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -133,6 +136,32 @@ function App() {
     lastUpdate: lastUpdate
   };
 
+  // Authentication loading
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="loading" style={{ 
+          height: '100vh', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          fontSize: '1.2rem',
+          color: '#666'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📍</div>
+            <div>LocAt yükleniyor...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Login required
+  if (!isAuthenticated()) {
+    return <Login onLogin={login} />;
+  }
+
   return (
     <div className="app">
       <Header 
@@ -141,6 +170,8 @@ function App() {
         onAutoRefreshChange={setAutoRefresh}
         onRefresh={fetchLocations}
         loading={loading}
+        user={user}
+        onLogout={logout}
       />
       
       <div className="main-content">
