@@ -45,33 +45,61 @@ function App() {
       // Kullanıcıları grupla ve en son konumlarını al
       const userMap = new Map();
       
-      // Kullanıcı email bilgilerini al
+      // Kullanıcı email bilgilerini auth.users tablosundan al
       const userEmailMap = new Map();
       
       // Benzersiz user ID'leri topla
       const userIds = [...new Set((data || []).map(location => location.user_id))];
       
-      // Her user ID için email bilgisini almaya çalış
-      for (const userId of userIds) {
+      // Supabase auth.users tablosundan email bilgilerini çek
+      if (userIds.length > 0) {
         try {
-          // RPC fonksiyonu ile user email'ini al
-          const { data: userEmail, error: emailError } = await supabase
-            .rpc('get_user_email', { user_uuid: userId });
+          // auth.users tablosuna doğrudan erişim için service_role key gerekli
+          // Bunun yerine RPC fonksiyonu kullanacağız
           
-          if (!emailError && userEmail) {
-            // Email'in @ işaretinden önceki kısmını al
-            const emailPrefix = userEmail.split('@')[0];
-            userEmailMap.set(userId, emailPrefix);
-          } else {
-            // Email alınamazsa, user ID'nin kısa formatını kullan
+          // Her user ID için email bilgisini al
+          const emailPromises = userIds.map(async (userId) => {
+            try {
+              const { data: email, error } = await supabase
+                .rpc('get_user_email', { user_uuid: userId });
+              
+              if (!error && email) {
+                // Email'in @ işaretinden önceki kısmını al
+                const emailPrefix = email.split('@')[0];
+                console.log(`User ${userId} email: ${email} → ${emailPrefix}`);
+                return { userId, emailPrefix };
+              } else {
+                console.log(`User ${userId} email alınamadı:`, error);
+                return { userId, emailPrefix: null };
+              }
+            } catch (error) {
+              console.log(`User ${userId} RPC hatası:`, error);
+              return { userId, emailPrefix: null };
+            }
+          });
+          
+          // Tüm email isteklerini bekle
+          const emailResults = await Promise.all(emailPromises);
+          
+          // Sonuçları map'e ekle
+          emailResults.forEach(({ userId, emailPrefix }) => {
+            if (emailPrefix) {
+              userEmailMap.set(userId, emailPrefix);
+            } else {
+              // Email alınamazsa daha okunabilir fallback isim kullan
+              const parts = userId.split('-');
+              const readableName = `User_${parts[0]}`;
+              userEmailMap.set(userId, readableName);
+            }
+          });
+          
+        } catch (error) {
+          console.log('Email bilgileri alınamadı:', error);
+          // Hata durumunda tüm kullanıcılar için fallback isim oluştur
+          userIds.forEach(userId => {
             const shortId = userId.substring(0, 8);
             userEmailMap.set(userId, `User_${shortId}`);
-          }
-        } catch (error) {
-          console.log(`User ${userId} email alınamadı:`, error);
-          // Hata durumunda fallback isim
-          const shortId = userId.substring(0, 8);
-          userEmailMap.set(userId, `User_${shortId}`);
+          });
         }
       }
 

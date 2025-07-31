@@ -11,9 +11,22 @@ L.Icon.Default.mergeOptions({
 });
 
 // Özel marker ikonları
-const createCustomIcon = (isOnline, isSelected) => {
+const createCustomIcon = (isOnline, isSelected, userName) => {
   const color = isSelected ? '#ff4444' : (isOnline ? '#4CAF50' : '#9E9E9E');
-  const size = isSelected ? 35 : 25;
+  const size = isSelected ? 44 : 31; // %25 artırıldı (35*1.25=44, 25*1.25=31)
+  
+  // Email'in ilk 3 harfini al
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    
+    // Eğer User_ ile başlıyorsa, User_ kısmını çıkar
+    const cleanName = name.startsWith('User_') ? name.replace('User_', '') : name;
+    
+    // İlk 3 harfi al ve büyük harfe çevir
+    return cleanName.substring(0, 3).toUpperCase();
+  };
+  
+  const initials = getInitials(userName);
   
   return L.divIcon({
     className: 'custom-marker',
@@ -30,10 +43,11 @@ const createCustomIcon = (isOnline, isSelected) => {
         justify-content: center;
         color: white;
         font-weight: bold;
-        font-size: ${size * 0.4}px;
+        font-size: ${size * 0.35}px;
+        font-family: 'Arial', sans-serif;
         ${isSelected ? 'animation: pulse 2s infinite;' : ''}
       ">
-        👤
+        ${initials}
       </div>
       <style>
         @keyframes pulse {
@@ -111,7 +125,7 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
         <Marker
           key={user.id}
           position={[user.latitude, user.longitude]}
-          icon={createCustomIcon(user.isOnline, selectedUser?.id === user.id)}
+          icon={createCustomIcon(user.isOnline, selectedUser?.id === user.id, user.name)}
           eventHandlers={{
             click: () => onUserSelect(user),
           }}
