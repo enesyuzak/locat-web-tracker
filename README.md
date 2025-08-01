@@ -28,6 +28,57 @@ LocAt mobil uygulamasının kullanıcı konumlarını web üzerinden takip etmek
 - **Otomatik Yenileme**: 30 saniyede bir otomatik veri çekme
 - **Supabase Real-time**: Anlık veri güncellemeleri
 - **Manuel Yenileme**: İsteğe bağlı manuel yenileme butonu
+- **Anlık Konum Çekme**: Tüm aktif kullanıcılardan anlık konum çekme ve kaydetme
+
+#### Anlık Konum Çekme Nasıl Çalışır:
+1. **"📍 Anlık Konum Çek" butonuna tıklayın**
+2. **Sistem son 24 saat içinde aktif olan kullanıcıları tespit eder**
+3. **Mobil cihazlara real-time konum talebi gönderilir**
+4. **Cihazlar anlık konumlarını `locations` tablosuna kaydeder**
+5. **Web paneli güncel verileri otomatik olarak gösterir**
+
+### 🔋 **Pil Durumu Takibi**
+- **Pil Seviyesi**: Kullanıcıların pil yüzdesi gösterimi
+- **Şarj Durumu**: Şarj olup olmadığı bilgisi
+- **Pil İstatistikleri**: Ortalama pil seviyesi ve düşük pil uyarıları
+- **Renkli Gösterim**: Pil seviyesine göre marker renkleri
+
+## Kurulum
+
+### Gereksinimler
+- Node.js 16+
+- Supabase hesabı
+- React 18+
+
+### Veritabanı Kurulumu
+
+Supabase'de aşağıdaki tabloları oluşturun:
+
+```sql
+-- Konum tablosu
+CREATE TABLE locations (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  battery_level INTEGER,
+  battery_status TEXT
+);
+
+-- FCM token tablosu (mobil uygulama kapalıyken push notification için)
+CREATE TABLE user_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE,
+  fcm_token TEXT NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- İndeksler
+CREATE INDEX idx_locations_user_id ON locations(user_id);
+CREATE INDEX idx_locations_updated_at ON locations(updated_at);
+CREATE INDEX idx_user_tokens_user_id ON user_tokens(user_id);
+```
 
 ## Kurulum
 

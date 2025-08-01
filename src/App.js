@@ -23,12 +23,24 @@ function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isRequestingLocations, setIsRequestingLocations] = useState(false);
 
   // Konumları çek
-  const fetchLocations = useCallback(async () => {
+  const fetchLocations = useCallback(async (forceRefresh = false) => {
     try {
       setLoading(true);
       setError(null);
+
+      // Eğer manuel yenileme ise, önce tüm kullanıcılardan anlık konum iste
+      if (forceRefresh) {
+        console.log('🔄 Manuel yenileme: Tüm kullanıcılardan GERÇEK ZAMANLI konum isteniyor...');
+        
+        // Hemen trigger sinyali gönder
+        await sendTriggerSignal();
+        
+        // Mobil cihazların yanıt vermesi için daha uzun bekle (gerçek zamanlı konum için)
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 saniye bekle
+      }
 
       const { data, error } = await supabase
         .from('locations')
@@ -86,10 +98,9 @@ function App() {
             if (emailPrefix) {
               userEmailMap.set(userId, emailPrefix);
             } else {
-              // Email alınamazsa daha okunabilir fallback isim kullan
-              const parts = userId.split('-');
-              const readableName = `User_${parts[0]}`;
-              userEmailMap.set(userId, readableName);
+              // Fallback: User ID'nin ilk 8 karakterini kullan
+              const shortId = userId.substring(0, 8);
+              userEmailMap.set(userId, `User_${shortId}`);
             }
           });
           
@@ -105,16 +116,31 @@ function App() {
 
       (data || []).forEach(location => {
         const userId = location.user_id;
+        
+        // Trigger kayıtlarını filtrele (gerçek konum kayıtları değil)
+        if (location.battery_status === 'LOCATION_REQUEST_TRIGGER' || 
+            location.battery_status === 'TRIGGER_TIMESTAMP_UPDATE') {
+          return;
+        }
+        
         if (!userMap.has(userId) || new Date(location.updated_at) > new Date(userMap.get(userId).updated_at)) {
           // Email prefix'i varsa kullan, yoksa User_XXXXXXXX formatını kullan
           const userName = userEmailMap.get(userId) || `User_${userId.substring(0, 8)}`;
+          
+          // Konum yaşını hesapla
+          const locationAge = getLocationAge(location.updated_at);
+          
           userMap.set(userId, {
             id: userId,
             name: userName,
             latitude: location.latitude,
             longitude: location.longitude,
             updated_at: location.updated_at,
-            isOnline: isUserOnline(location.updated_at)
+            isOnline: isUserOnline(location.updated_at),
+            batteryLevel: location.battery_level || null,
+            batteryStatus: location.battery_status || null,
+            locationAge: locationAge,
+            isStale: !isUserOnline(location.updated_at) // Eski konum mu?
           });
         }
       });
@@ -131,12 +157,235 @@ function App() {
     }
   }, []);
 
+  // Basit trigger sinyali gönder - Alternatif yöntem
+  const sendTriggerSignal = async () => {
+    console.log('🔓 Trigger sinyali gönderiliyor...');
+    
+    try {
+      const timestamp = new Date().toISOString();
+      console.log('📡 Trigger sinyali gönderiliyor (alternatif yöntem)...', timestamp);
+      
+      // Mevcut kullanıcılardan birini kullan (foreign key constraint için)
+      const { data: existingUsers, error: usersError } = await supabase
+        .from('locations')
+        .select('user_id')
+        .limit(1)
+        .order('updated_at', { ascending: false });
+
+      if (usersError || !existingUsers || existingUsers.length === 0) {
+        console.error('❌ Mevcut kullanıcı bulunamadı, trigger gönderilemiyor');
+        return;
+      }
+
+      const existingUserId = existingUsers[0].user_id;
+      console.log('👤 Kullanıcı ID kullanılıyor:', existingUserId);
+      
+      // Yöntem 1: Özel trigger kaydı
+      const triggerRecord = {
+        user_id: existingUserId, // Mevcut kullanıcı ID'si kullan
+        latitude: 0,
+        longitude: 0,
+        updated_at: timestamp,
+        battery_level: -999,
+        battery_status: 'LOCATION_REQUEST_TRIGGER'
+      };
+
+      console.log('📡 Gönderilecek trigger kaydı:', triggerRecord);
+
+      const { data: triggerData, error: triggerError } = await supabase
+        .from('locations')
+        .insert([triggerRecord]);
+      
+      if (triggerError) {
+        console.error('❌ Trigger gönderme hatası:', triggerError);
+      } else {
+        console.log('✅ Trigger sinyali başarıyla gönderildi:', triggerData);
+      }
+
+      // Yöntem 2: Mevcut kullanıcıların battery_status'unu güncelle
+      console.log('📡 Alternatif: Mevcut kullanıcılara sinyal gönderiliyor...');
+      
+      // Son 2 saat içinde aktif olan kullanıcıları bul
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: activeUsers, error: activeUsersError } = await supabase
+        .from('locations')
+        .select('user_id')
+        .gte('updated_at', twoHoursAgo)
+        .neq('battery_status', 'LOCATION_REQUEST_TRIGGER')
+        .neq('battery_status', 'TRIGGER_TIMESTAMP_UPDATE');
+
+      if (!activeUsersError && activeUsers && activeUsers.length > 0) {
+        console.log(`📱 ${activeUsers.length} aktif kullanıcıya trigger gönderiliyor...`);
+        
+        // Her aktif kullanıcı için özel trigger kaydı oluştur
+        const userTriggers = activeUsers.slice(0, 5).map(user => ({
+          user_id: user.user_id,
+          latitude: 0,
+          longitude: 0,
+          updated_at: timestamp,
+          battery_level: -888,
+          battery_status: 'LOCATION_REQUEST_TRIGGER'
+        }));
+
+        const { data: userTriggerData, error: userTriggerError } = await supabase
+          .from('locations')
+          .insert(userTriggers);
+
+        if (userTriggerError) {
+          console.error('❌ Kullanıcı trigger gönderme hatası:', userTriggerError);
+        } else {
+          console.log('✅ Kullanıcı trigger sinyalleri gönderildi:', userTriggerData);
+        }
+      } else {
+        console.log('⚠️ Aktif kullanıcı bulunamadı, sadece ana trigger gönderildi');
+      }
+
+      console.log('✅ Trigger zamanı:', timestamp);
+      
+    } catch (error) {
+      console.error('❌ Trigger gönderme exception:', error);
+    }
+  };
+
   // Kullanıcının online olup olmadığını kontrol et (son 30 dakika)
   const isUserOnline = (lastUpdate) => {
     const now = new Date();
     const updateTime = new Date(lastUpdate);
     const diffMinutes = (now - updateTime) / (1000 * 60);
     return diffMinutes <= 30;
+  };
+
+  // Konum yaşını hesapla ve okunabilir format döndür
+  const getLocationAge = (lastUpdate) => {
+    const now = new Date();
+    const updateTime = new Date(lastUpdate);
+    const diffMinutes = (now - updateTime) / (1000 * 60);
+    
+    if (diffMinutes < 1) {
+      return 'Şimdi';
+    } else if (diffMinutes < 60) {
+      return `${Math.floor(diffMinutes)} dk önce`;
+    } else if (diffMinutes < 1440) { // 24 saat
+      const hours = Math.floor(diffMinutes / 60);
+      return `${hours} saat önce`;
+    } else {
+      const days = Math.floor(diffMinutes / 1440);
+      return `${days} gün önce`;
+    }
+  };
+
+  // Tüm kullanıcılardan anlık konum çek ve kaydet
+  const requestLocationFromAllUsers = async () => {
+    try {
+      setIsRequestingLocations(true);
+      console.log('📍 Tüm kullanıcılardan GERÇEK ZAMANLI konum isteniyor...');
+      
+      // Hemen trigger sinyali gönder
+      await sendTriggerSignal();
+      
+      // Mobil cihazların yanıt vermesi için daha uzun bekle (gerçek zamanlı konum için)
+      await new Promise(resolve => setTimeout(resolve, 10000)); // 10 saniye bekle
+
+      // Önce mevcut aktif kullanıcıları tespit et
+      const { data: currentLocations, error } = await supabase
+        .from('locations')
+        .select('user_id')
+        .neq('battery_status', 'LOCATION_REQUEST_TRIGGER')
+        .neq('battery_status', 'TRIGGER_TIMESTAMP_UPDATE')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Aktif kullanıcılar alınamadı:', error);
+        setIsRequestingLocations(false);
+        return;
+      }
+
+      // Benzersiz kullanıcıları al
+      const activeUsers = new Set(currentLocations?.map(loc => loc.user_id) || []);
+      console.log(`📊 ${activeUsers.size} aktif kullanıcı tespit edildi`);
+
+      if (activeUsers.size === 0) {
+        console.log('⚠️ Aktif kullanıcı bulunamadı');
+        setIsRequestingLocations(false);
+        return;
+      }
+
+      let waitTime = 0;
+      const maxWaitTime = 30000; // 30 saniye (gerçek zamanlı konum için daha uzun)
+      const checkInterval = 3000; // 3 saniye
+      
+      const checkForNewLocations = async () => {
+        if (waitTime >= maxWaitTime) {
+          console.log('⏰ Maksimum bekleme süresi doldu');
+          setIsRequestingLocations(false);
+          fetchLocations(false);
+          return;
+        }
+
+        // Son 2 dakika içindeki yeni konumları kontrol et (gerçek zamanlı konum için daha geniş aralık)
+        const twoMinutesAgo = new Date(Date.now() - 120000).toISOString();
+        const { data: recentLocations } = await supabase
+          .from('locations')
+          .select('user_id, updated_at')
+          .gte('updated_at', twoMinutesAgo)
+          .neq('battery_status', 'LOCATION_REQUEST_TRIGGER')
+          .neq('battery_status', 'TRIGGER_TIMESTAMP_UPDATE')
+          .order('updated_at', { ascending: false });
+
+        const recentUserCount = new Set(recentLocations?.map(loc => loc.user_id) || []).size;
+        
+        console.log(`📊 Son 2 dakikada ${recentUserCount} kullanıcıdan gerçek zamanlı konum alındı`);
+        
+        if (recentUserCount >= Math.min(activeUsers.size * 0.3, 2)) {
+          // Kullanıcıların en az %30'undan veya minimum 2 kullanıcıdan yanıt geldi
+          console.log('✅ Yeterli sayıda gerçek zamanlı konum yanıtı alındı');
+          setIsRequestingLocations(false);
+          fetchLocations(false);
+          return;
+        }
+
+        waitTime += checkInterval;
+        setTimeout(checkForNewLocations, checkInterval);
+      };
+
+      // Fallback trigger sistemi
+      const sendTriggerFallback = async () => {
+        console.log('📡 Fallback: Trigger sistemi kullanılıyor...');
+        
+        // Mevcut kullanıcılardan birini kullan (foreign key constraint için)
+        const { data: existingUsers, error: usersError } = await supabase
+          .from('locations')
+          .select('user_id')
+          .limit(1)
+          .order('updated_at', { ascending: false });
+
+        if (usersError || !existingUsers || existingUsers.length === 0) {
+          console.error('❌ Mevcut kullanıcı bulunamadı, fallback trigger gönderilemiyor');
+          return;
+        }
+
+        const existingUserId = existingUsers[0].user_id;
+        
+        const triggerRecord = {
+          user_id: existingUserId, // Mevcut kullanıcı ID'si kullan
+          latitude: 0,
+          longitude: 0,
+          updated_at: new Date().toISOString(),
+          battery_level: -999,
+          battery_status: 'LOCATION_REQUEST_TRIGGER'
+        };
+
+        await supabase.from('locations').insert([triggerRecord]);
+        console.log('✅ Fallback trigger sinyali gönderildi');
+      };
+
+      // İlk kontrol 5 saniye sonra başlasın
+      setTimeout(checkForNewLocations, 5000);
+
+    } catch (error) {
+      console.error('❌ Konum talebi hatası:', error);
+      setIsRequestingLocations(false);
+    }
   };
 
   // Otomatik yenileme
@@ -189,11 +438,20 @@ function App() {
   );
 
   // İstatistikler
+  const usersWithBattery = users.filter(user => user.batteryLevel !== null && user.batteryLevel !== undefined);
+  const lowBatteryUsers = usersWithBattery.filter(user => user.batteryLevel < 20);
+  const avgBattery = usersWithBattery.length > 0 
+    ? Math.round(usersWithBattery.reduce((sum, user) => sum + user.batteryLevel, 0) / usersWithBattery.length)
+    : null;
+
   const stats = {
     totalUsers: users.length,
     onlineUsers: users.filter(user => user.isOnline).length,
     totalLocations: locations.length,
-    lastUpdate: lastUpdate
+    lastUpdate: lastUpdate,
+    usersWithBattery: usersWithBattery.length,
+    lowBatteryUsers: lowBatteryUsers.length,
+    avgBattery: avgBattery
   };
 
   // Authentication loading
@@ -228,8 +486,8 @@ function App() {
         stats={stats}
         autoRefresh={autoRefresh}
         onAutoRefreshChange={setAutoRefresh}
-        onRefresh={fetchLocations}
-        loading={loading}
+        onRefresh={() => fetchLocations(true)}
+        loading={loading || isRequestingLocations}
         user={user}
         onLogout={logout}
       />

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -10,9 +10,122 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Adres temizleme fonksiyonu
+const cleanAddressText = (text) => {
+  if (!text) return '';
+  
+  return text
+    .replace(/ Sokak$/i, '')
+    .replace(/ Caddesi$/i, '')
+    .replace(/ Yolu$/i, '')
+    .replace(/ Bulvarı$/i, '')
+    .replace(/ Mahallesi$/i, '')
+    .replace(/ Mahalle$/i, '')
+    .replace(/ Semti$/i, '')
+    .replace(/ Semt$/i, '')
+    .replace(/ Köyü$/i, '')
+    .replace(/ Köy$/i, '')
+    .replace(/ Kasabası$/i, '')
+    .replace(/ Kasaba$/i, '')
+    .replace(/ İlçesi$/i, '')
+    .replace(/ İlçe$/i, '')
+    .replace(/ İli$/i, '')
+    .replace(/ İl$/i, '')
+    .trim();
+};
+
+// Açık adres alma fonksiyonu
+const getAddressFromCoordinates = async (latitude, longitude) => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=tr`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Adres alınamadı');
+    }
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    // Adres bileşenlerini al
+    const address = data.address;
+    
+    // Türkçe adres formatı oluştur
+    let fullAddress = '';
+    
+    // Sokak ve numara
+    if (address.house_number && address.road) {
+      fullAddress += `No:${address.house_number}`;
+    } else if (address.road) {
+      fullAddress += cleanAddressText(address.road);
+    }
+    
+    // Mahalle
+    if (address.suburb) {
+      const suburbName = cleanAddressText(address.suburb);
+      fullAddress += fullAddress ? `,${suburbName}` : suburbName;
+    } else if (address.neighbourhood) {
+      const neighbourhoodName = cleanAddressText(address.neighbourhood);
+      fullAddress += fullAddress ? `,${neighbourhoodName}` : neighbourhoodName;
+    }
+    
+    // İlçe
+    if (address.city_district) {
+      const districtName = cleanAddressText(address.city_district);
+      fullAddress += fullAddress ? `,${districtName}` : districtName;
+    } else if (address.district) {
+      const districtName = cleanAddressText(address.district);
+      fullAddress += fullAddress ? `,${districtName}` : districtName;
+    }
+    
+    // İl
+    if (address.city) {
+      const cityName = cleanAddressText(address.city);
+      fullAddress += fullAddress ? `,${cityName}` : cityName;
+    } else if (address.state) {
+      const stateName = cleanAddressText(address.state);
+      fullAddress += fullAddress ? `,${stateName}` : stateName;
+    }
+    
+    // Ülke
+    if (address.country) {
+      const countryName = cleanAddressText(address.country);
+      fullAddress += fullAddress ? `,${countryName}` : countryName;
+    }
+    
+    return fullAddress || 'Adres bilgisi alınamadı';
+    
+  } catch (error) {
+    console.error('Adres alma hatası:', error);
+    return 'Adres bilgisi alınamadı';
+  }
+};
+
 // Özel marker ikonları
-const createCustomIcon = (isOnline, isSelected, userName) => {
-  const color = isSelected ? '#ff4444' : (isOnline ? '#4CAF50' : '#9E9E9E');
+const createCustomIcon = (isOnline, isSelected, userName, batteryLevel = null) => {
+  let color;
+  
+  if (isSelected) {
+    color = '#ff4444'; // Seçili kullanıcı - kırmızı
+  } else if (!isOnline) {
+    color = '#9E9E9E'; // Offline - gri
+  } else if (batteryLevel !== null && batteryLevel !== undefined) {
+    // Pil seviyesine göre renk
+    if (batteryLevel >= 50) {
+      color = '#4CAF50'; // Yüksek pil - yeşil
+    } else if (batteryLevel >= 20) {
+      color = '#FF9800'; // Orta pil - turuncu
+    } else {
+      color = '#f44336'; // Düşük pil - kırmızı
+    }
+  } else {
+    color = '#4CAF50'; // Varsayılan - yeşil
+  }
+  
   const size = isSelected ? 44 : 31; // %25 artırıldı (35*1.25=44, 25*1.25=31)
   
   // Email'in ilk 3 harfini al
@@ -86,6 +199,7 @@ const MapController = ({ selectedUser, users }) => {
 
 const MapComponent = ({ users, selectedUser, onUserSelect }) => {
   const mapRef = useRef();
+  const [address, setAddress] = useState('');
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -103,9 +217,59 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
     return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   };
 
+  const formatBatteryInfo = (batteryLevel, batteryStatus) => {
+    if (!batteryLevel && !batteryStatus) {
+      return null;
+    }
+
+    const getBatteryIcon = (level) => {
+      if (level >= 80) return '🔋';
+      if (level >= 50) return '🔋';
+      if (level >= 20) return '🪫';
+      return '🪫';
+    };
+
+    const getBatteryColor = (level) => {
+      if (level >= 50) return '#4CAF50';
+      if (level >= 20) return '#FF9800';
+      return '#f44336';
+    };
+
+    let batteryText = '';
+    let batteryColor = '#666';
+
+    if (batteryLevel !== null && batteryLevel !== undefined) {
+      const icon = getBatteryIcon(batteryLevel);
+      batteryColor = getBatteryColor(batteryLevel);
+      batteryText = `${icon} %${batteryLevel}`;
+      
+      if (batteryStatus) {
+        const isCharging = batteryStatus.includes('oluyor') || batteryStatus.includes('charging');
+        batteryText += isCharging ? ' ⚡' : '';
+      }
+    } else if (batteryStatus) {
+      batteryText = batteryStatus;
+    }
+
+    return { text: batteryText, color: batteryColor };
+  };
+
   // Varsayılan harita merkezi (İstanbul)
   const defaultCenter = [41.0082, 28.9784];
   const defaultZoom = 10;
+
+  useEffect(() => {
+    const updateAddress = async () => {
+      if (selectedUser) {
+        const addr = await getAddressFromCoordinates(selectedUser.latitude, selectedUser.longitude);
+        setAddress(addr);
+      } else {
+        setAddress('');
+      }
+    };
+
+    updateAddress();
+  }, [selectedUser]);
 
   return (
     <MapContainer
@@ -125,9 +289,14 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
         <Marker
           key={user.id}
           position={[user.latitude, user.longitude]}
-          icon={createCustomIcon(user.isOnline, selectedUser?.id === user.id, user.name)}
+          icon={createCustomIcon(user.isOnline, selectedUser?.id === user.id, user.name, user.batteryLevel)}
           eventHandlers={{
-            click: () => onUserSelect(user),
+            click: async () => {
+              onUserSelect(user);
+              // Marker'a tıklandığında adres bilgisini al
+              const addr = await getAddressFromCoordinates(user.latitude, user.longitude);
+              setAddress(addr);
+            },
           }}
         >
           <Popup>
@@ -163,12 +332,41 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
                 </code>
               </div>
               
+              {selectedUser?.id === user.id && address && (
+                <div style={{ marginBottom: '8px' }}>
+                  <strong>Açık Adres:</strong><br />
+                  <span style={{ 
+                    fontSize: '13px', 
+                    color: '#333',
+                    fontStyle: 'italic'
+                  }}>
+                    📍 {address}
+                  </span>
+                </div>
+              )}
+              
               <div style={{ marginBottom: '8px' }}>
                 <strong>Son Güncelleme:</strong><br />
                 <span style={{ fontSize: '13px', color: '#666' }}>
                   {formatTime(user.updated_at)}
                 </span>
               </div>
+
+              {(() => {
+                const batteryInfo = formatBatteryInfo(user.batteryLevel, user.batteryStatus);
+                return batteryInfo ? (
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong>Pil Durumu:</strong>{' '}
+                    <span style={{ 
+                      color: batteryInfo.color,
+                      fontWeight: 'bold',
+                      fontSize: '14px'
+                    }}>
+                      {batteryInfo.text}
+                    </span>
+                  </div>
+                ) : null;
+              })()}
               
               <div style={{ 
                 marginTop: '10px',

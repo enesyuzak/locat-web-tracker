@@ -240,6 +240,30 @@ code {
   font-style: italic;
 }
 
+.user-time.stale {
+  color: #ff9800;
+  font-weight: 500;
+}
+
+.stale-indicator {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.stale-text {
+  color: #ff9800;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.user-battery {
+  color: #4CAF50;
+  font-weight: 500;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+}
+
 .user-status {
   display: inline-block;
   width: 8px;

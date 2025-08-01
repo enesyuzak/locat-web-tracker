@@ -10,52 +10,98 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const Login = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
-    const { email, password } = credentials;
+    const { email, password, confirmPassword } = credentials;
+
+    // Register mode validasyonları
+    if (isRegisterMode) {
+      if (password !== confirmPassword) {
+        setError('Şifreler eşleşmiyor');
+        setLoading(false);
+        return;
+      }
+      
+      if (password.length < 6) {
+        setError('Şifre en az 6 karakter olmalıdır');
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
-      // Supabase Auth ile giriş yap
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password
-      });
+      if (isRegisterMode) {
+        // Kayıt olma işlemi
+        const { data, error } = await supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: {
+              username: email.split('@')[0]
+            }
+          }
+        });
 
-      if (error) {
-        throw error;
-      }
+        if (error) {
+          throw error;
+        }
 
-      if (data.user && data.session) {
-        // Login başarılı
-        const userData = {
-          id: data.user.id,
-          email: data.user.email,
-          username: data.user.email.split('@')[0],
-          role: 'admin', // Tüm giriş yapan kullanıcılar admin olarak kabul edilsin
-          loginTime: new Date().toISOString(),
-          accessToken: data.session.access_token,
-          refreshToken: data.session.refresh_token
-        };
-        
-        // LocalStorage'a kaydet
-        localStorage.setItem('locat_auth', JSON.stringify(userData));
-        localStorage.setItem('locat_auth_token', data.session.access_token);
-        
-        onLogin(userData);
+        if (data.user) {
+          setSuccess('Kayıt başarılı! Email adresinizi kontrol edin ve doğrulama linkine tıklayın.');
+          setCredentials({ email: '', password: '', confirmPassword: '' });
+          // 3 saniye sonra login moduna geç
+          setTimeout(() => {
+            setIsRegisterMode(false);
+            setSuccess('');
+          }, 3000);
+        }
+      } else {
+        // Giriş yapma işlemi
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.user && data.session) {
+          // Login başarılı
+          const userData = {
+            id: data.user.id,
+            email: data.user.email,
+            username: data.user.email.split('@')[0],
+            role: 'admin',
+            loginTime: new Date().toISOString(),
+            accessToken: data.session.access_token,
+            refreshToken: data.session.refresh_token
+          };
+          
+          // LocalStorage'a kaydet
+          localStorage.setItem('locat_auth', JSON.stringify(userData));
+          localStorage.setItem('locat_auth_token', data.session.access_token);
+          
+          onLogin(userData);
+        }
       }
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('Auth error:', err);
       
       // Kullanıcı dostu hata mesajları
-      let errorMessage = 'Giriş yapılırken bir hata oluştu';
+      let errorMessage = isRegisterMode ? 'Kayıt olurken bir hata oluştu' : 'Giriş yapılırken bir hata oluştu';
       
       if (err.message.includes('Invalid login credentials')) {
         errorMessage = 'Geçersiz email veya şifre';
@@ -65,6 +111,12 @@ const Login = ({ onLogin }) => {
         errorMessage = 'Çok fazla deneme yapıldı, lütfen daha sonra tekrar deneyin';
       } else if (err.message.includes('Invalid email')) {
         errorMessage = 'Geçersiz email formatı';
+      } else if (err.message.includes('User already registered')) {
+        errorMessage = 'Bu email adresi zaten kayıtlı';
+      } else if (err.message.includes('Password should be at least 6 characters')) {
+        errorMessage = 'Şifre en az 6 karakter olmalıdır';
+      } else if (err.message.includes('Unable to validate email address')) {
+        errorMessage = 'Email adresi doğrulanamadı';
       }
       
       setError(errorMessage);
@@ -78,7 +130,15 @@ const Login = ({ onLogin }) => {
       ...credentials,
       [e.target.name]: e.target.value
     });
-    setError(''); // Clear error when user types
+    setError('');
+    setSuccess('');
+  };
+
+  const toggleMode = () => {
+    setIsRegisterMode(!isRegisterMode);
+    setCredentials({ email: '', password: '', confirmPassword: '' });
+    setError('');
+    setSuccess('');
   };
 
   return (
@@ -94,7 +154,7 @@ const Login = ({ onLogin }) => {
             <h1>LocAt</h1>
           </div>
           <h2>Web Tracker</h2>
-          <p>Konum takip sistemi yönetim paneli</p>
+          <p>{isRegisterMode ? 'Yeni hesap oluşturun' : 'Konum takip sistemi yönetim paneli'}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -121,15 +181,40 @@ const Login = ({ onLogin }) => {
               value={credentials.password}
               onChange={handleChange}
               required
-              placeholder="Şifrenizi girin"
+              placeholder={isRegisterMode ? "Şifrenizi oluşturun (min. 6 karakter)" : "Şifrenizi girin"}
               disabled={loading}
+              minLength={isRegisterMode ? 6 : undefined}
             />
           </div>
+
+          {isRegisterMode && (
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Şifre Tekrar</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                name="confirmPassword"
+                value={credentials.confirmPassword}
+                onChange={handleChange}
+                required
+                placeholder="Şifrenizi tekrar girin"
+                disabled={loading}
+                minLength={6}
+              />
+            </div>
+          )}
 
           {error && (
             <div className="error-message">
               <span className="error-icon">⚠️</span>
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="success-message">
+              <span className="success-icon">✅</span>
+              {success}
             </div>
           )}
 
@@ -141,21 +226,43 @@ const Login = ({ onLogin }) => {
             {loading ? (
               <>
                 <span className="spinner"></span>
-                Giriş yapılıyor...
+                {isRegisterMode ? 'Kayıt oluşturuluyor...' : 'Giriş yapılıyor...'}
               </>
             ) : (
-              'Giriş Yap'
+              isRegisterMode ? 'Kayıt Ol' : 'Giriş Yap'
             )}
           </button>
+
+          <div className="auth-toggle">
+            <button 
+              type="button" 
+              className="toggle-button"
+              onClick={toggleMode}
+              disabled={loading}
+            >
+              {isRegisterMode ? 'Zaten hesabınız var mı? Giriş yapın' : 'Hesabınız yok mu? Kayıt olun'}
+            </button>
+          </div>
         </form>
 
         <div className="login-footer">
           <div className="login-info">
-            <h4>ℹ️ Giriş Bilgisi</h4>
-            <p>LocAt mobil uygulamasında kayıtlı olan email ve şifrenizi kullanarak giriş yapabilirsiniz.</p>
-            <div className="info-note">
-              <strong>Not:</strong> Henüz hesabınız yoksa, önce LocAt mobil uygulamasından kayıt olmanız gerekmektedir.
-            </div>
+            <h4>ℹ️ {isRegisterMode ? 'Kayıt Bilgisi' : 'Giriş Bilgisi'}</h4>
+            {isRegisterMode ? (
+              <>
+                <p>Web paneli için yeni bir hesap oluşturun. Kayıt olduktan sonra email adresinizi doğrulamanız gerekecek.</p>
+                <div className="info-note">
+                  <strong>Not:</strong> Bu hesap sadece web paneli içindir. Mobil uygulama için ayrı kayıt gereklidir.
+                </div>
+              </>
+            ) : (
+              <>
+                <p>LocAt web paneli veya mobil uygulamasında kayıtlı olan email ve şifrenizi kullanarak giriş yapabilirsiniz.</p>
+                <div className="info-note">
+                  <strong>Not:</strong> Henüz hesabınız yoksa yukarıdaki "Kayıt Ol" butonunu kullanabilirsiniz.
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

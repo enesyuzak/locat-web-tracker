@@ -1,6 +1,7 @@
 import React from 'react';
 
 const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, user, onLogout }) => {
+  console.log('Header props:', { stats, autoRefresh, loading, user });
   const formatTime = (date) => {
     if (!date) return 'Hiç';
     return date.toLocaleTimeString('tr-TR', {
@@ -14,7 +15,11 @@ const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, u
     <header className="header">
       <h1>LocAt - Konum Takip Sistemi</h1>
       
-      <div className="header-info">
+      <div className="header-info" style={{
+        display: 'flex',
+        visibility: 'visible',
+        opacity: 1
+      }}>
         <div className="stats">
           <div className="stat-item">
             <div className="stat-number">{stats.totalUsers}</div>
@@ -35,15 +40,56 @@ const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, u
             <div className="stat-number">{formatTime(stats.lastUpdate)}</div>
             <div className="stat-label">Son Güncelleme</div>
           </div>
+
+          {stats.avgBattery !== null && (
+            <div className="stat-item">
+              <div className="stat-number" style={{ 
+                color: stats.avgBattery >= 50 ? '#4CAF50' : stats.avgBattery >= 20 ? '#FF9800' : '#f44336' 
+              }}>
+                🔋 %{stats.avgBattery}
+              </div>
+              <div className="stat-label">Ortalama Pil</div>
+            </div>
+          )}
+
+          {stats.lowBatteryUsers > 0 && (
+            <div className="stat-item">
+              <div className="stat-number" style={{ color: '#f44336' }}>
+                🪫 {stats.lowBatteryUsers}
+              </div>
+              <div className="stat-label">Düşük Pil</div>
+            </div>
+          )}
         </div>
         
-        <div className="controls">
+        <div className="controls" style={{
+          display: 'flex',
+          visibility: 'visible',
+          opacity: 1,
+          zIndex: 1000
+        }}>
           <button 
             className="refresh-btn" 
             onClick={onRefresh}
             disabled={loading}
+            title="Tüm aktif kullanıcılardan gerçek zamanlı konum çek ve verileri yenile"
+            style={{
+              display: 'block',
+              visibility: 'visible',
+              opacity: 1,
+              zIndex: 1000,
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: '2px solid #45a049',
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              margin: '10px'
+            }}
           >
-            {loading ? 'Yenileniyor...' : 'Yenile'}
+            {loading ? '📡 Cihazlardan gerçek zamanlı konum çekiliyor...' : '📍 Gerçek Zamanlı Konum Çek'}
           </button>
           
           <div className="auto-refresh">

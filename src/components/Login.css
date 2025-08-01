@@ -149,6 +149,49 @@
   font-size: 1.1rem;
 }
 
+.success-message {
+  background: #e8f5e8;
+  color: #2e7d32;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  border-left: 4px solid #4caf50;
+}
+
+.success-icon {
+  font-size: 1.1rem;
+}
+
+.auth-toggle {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.toggle-button {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.5rem;
+  transition: color 0.3s ease;
+}
+
+.toggle-button:hover {
+  color: #5a67d8;
+}
+
+.toggle-button:disabled {
+  color: #999;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .login-button {
   width: 100%;
   padding: 1rem;

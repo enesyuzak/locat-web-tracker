@@ -24,6 +24,29 @@ const UserList = ({
     return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   };
 
+  const formatBatteryInfo = (batteryLevel, batteryStatus) => {
+    if (!batteryLevel && !batteryStatus) {
+      return null;
+    }
+
+    const getBatteryIcon = (level) => {
+      if (level >= 80) return '🔋';
+      if (level >= 50) return '🔋';
+      if (level >= 20) return '🪫';
+      return '🪫';
+    };
+
+    if (batteryLevel !== null && batteryLevel !== undefined) {
+      const icon = getBatteryIcon(batteryLevel);
+      const isCharging = batteryStatus && (batteryStatus.includes('oluyor') || batteryStatus.includes('charging'));
+      return `${icon} %${batteryLevel}${isCharging ? ' ⚡' : ''}`;
+    } else if (batteryStatus) {
+      return `🔋 ${batteryStatus}`;
+    }
+
+    return null;
+  };
+
   if (error) {
     return (
       <div className="sidebar">
@@ -66,15 +89,22 @@ const UserList = ({
               <div className="user-name">
                 <span className={`user-status ${user.isOnline ? 'online' : 'offline'}`}></span>
                 {user.name}
+                {user.isStale && <span className="stale-indicator" title="Eski konum">📍⏰</span>}
               </div>
               
               <div className="user-info">
                 <div className="user-location">
                   📍 {formatCoordinates(user.latitude, user.longitude)}
                 </div>
-                <div className="user-time">
-                  🕒 {formatTime(user.updated_at)}
+                <div className={`user-time ${user.isStale ? 'stale' : ''}`}>
+                  🕒 {user.locationAge || formatTime(user.updated_at)}
+                  {user.isStale && <span className="stale-text"> (Son bilinen konum)</span>}
                 </div>
+                {formatBatteryInfo(user.batteryLevel, user.batteryStatus) && (
+                  <div className="user-battery">
+                    {formatBatteryInfo(user.batteryLevel, user.batteryStatus)}
+                  </div>
+                )}
               </div>
             </div>
           ))
