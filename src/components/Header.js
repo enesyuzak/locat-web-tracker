@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, user, onLogout }) => {
+const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, user, onLogout, onShowProfile }) => {
   console.log('Header props:', { stats, autoRefresh, loading, user });
   const formatTime = (date) => {
     if (!date) return 'Hiç';
@@ -108,13 +108,29 @@ const Header = ({ stats, autoRefresh, onAutoRefreshChange, onRefresh, loading, u
                 <span className="user-name">👤 {user.username}</span>
                 <span className="user-role">({user.role})</span>
               </div>
-              <button 
-                className="logout-btn" 
-                onClick={onLogout}
-                title="Çıkış Yap"
-              >
-                🚪 Çıkış
-              </button>
+              <div className="user-actions">
+                <button 
+                  className="profile-btn" 
+                  onClick={() => {
+                    console.log('Profil butonuna tıklandı');
+                    if (onShowProfile) {
+                      onShowProfile();
+                    } else {
+                      console.error('onShowProfile prop\'u bulunamadı');
+                    }
+                  }}
+                  title="Profil Bilgileri"
+                >
+                  ⚙️ Profil
+                </button>
+                <button 
+                  className="logout-btn" 
+                  onClick={onLogout}
+                  title="Çıkış Yap"
+                >
+                  🚪 Çıkış
+                </button>
+              </div>
             </div>
           )}
         </div>

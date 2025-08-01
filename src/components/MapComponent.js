@@ -203,14 +203,16 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
-    return date.toLocaleString('tr-TR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    
+    // UTC zamanını olduğu gibi göster (timezone dönüşümü yapma)
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds} UTC`;
   };
 
   const formatCoordinates = (lat, lng) => {
@@ -377,6 +379,36 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
                 color: '#666'
               }}>
                 ID: {user.id.substring(0, 8)}...
+              </div>
+              
+              <div style={{ 
+                marginTop: '10px',
+                textAlign: 'center'
+              }}>
+                <button
+                  onClick={() => {
+                    const googleMapsUrl = `https://www.google.com/maps?q=${user.latitude},${user.longitude}`;
+                    window.open(googleMapsUrl, '_blank');
+                  }}
+                  style={{
+                    background: '#4285f4',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    width: '100%'
+                  }}
+                  title="Google Maps'te Aç"
+                >
+                  🗺️ Google Maps'te Aç
+                </button>
               </div>
             </div>
           </Popup>

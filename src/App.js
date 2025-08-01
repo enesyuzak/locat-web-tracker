@@ -4,8 +4,10 @@ import MapComponent from './components/MapComponent';
 import UserList from './components/UserList';
 import Header from './components/Header';
 import Login from './components/Login';
+import Profile from './components/Profile';
 import useAuth from './hooks/useAuth';
 import './index.css';
+import './components/Profile.css';
 
 // Supabase yapılandırması
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://zunrhemhtbslfythqzsi.supabase.co';
@@ -20,10 +22,14 @@ function App() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem('locat_autoRefresh');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
   const [lastUpdate, setLastUpdate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isRequestingLocations, setIsRequestingLocations] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   // Konumları çek
   const fetchLocations = useCallback(async (forceRefresh = false) => {
@@ -426,6 +432,11 @@ function App() {
     };
   }, [fetchLocations]);
 
+  // Profil state'ini debug et
+  useEffect(() => {
+    console.log('showProfile state değişti:', showProfile);
+  }, [showProfile]);
+
   // Kullanıcı seçimi
   const handleUserSelect = (user) => {
     setSelectedUser(user);
@@ -485,11 +496,20 @@ function App() {
       <Header 
         stats={stats}
         autoRefresh={autoRefresh}
-        onAutoRefreshChange={setAutoRefresh}
+        onAutoRefreshChange={(value) => {
+          setAutoRefresh(value);
+          localStorage.setItem('locat_autoRefresh', JSON.stringify(value));
+        }}
         onRefresh={() => fetchLocations(true)}
         loading={loading || isRequestingLocations}
         user={user}
         onLogout={logout}
+        onShowProfile={() => {
+          console.log('Header\'dan showProfile çağrıldı');
+          console.log('Önceki showProfile state:', showProfile);
+          setShowProfile(true);
+          console.log('setShowProfile(true) çağrıldı');
+        }}
       />
       
       <div className="main-content">
@@ -511,6 +531,23 @@ function App() {
           />
         </div>
       </div>
+
+      {/* Profile modal */}
+      {showProfile && (
+        <Profile
+          user={user}
+          autoRefresh={autoRefresh}
+          onAutoRefreshChange={(value) => {
+            setAutoRefresh(value);
+            localStorage.setItem('locat_autoRefresh', JSON.stringify(value));
+          }}
+          onClose={() => {
+            console.log('Profile kapatılıyor');
+            setShowProfile(false);
+          }}
+          onLogout={logout}
+        />
+      )}
     </div>
   );
 }
