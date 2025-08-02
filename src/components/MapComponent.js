@@ -175,22 +175,74 @@ const createCustomIcon = (isOnline, isSelected, userName, batteryLevel = null) =
   });
 };
 
-// Haritayı seçili kullanıcıya odakla
-const MapController = ({ selectedUser, users }) => {
+// Haritayı akıllı şekilde odakla
+const MapController = ({ selectedUser, users, isInitialized }) => {
   const map = useMap();
   
   useEffect(() => {
+    // Harita henüz başlatılmadıysa bekle
+    if (!isInitialized) {
+      console.log('MapController - Henüz başlatılmadı, bekle');
+      return;
+    }
+
+    // Kullanıcılar yüklenene kadar bekle
+    if (!users || users.length === 0) {
+      console.log('MapController - Kullanıcı yok');
+      return;
+    }
+
+    // Geçerli koordinatları kontrol et - daha sıkı kontrol
+    const validUsers = users.filter(user => 
+      user.latitude && user.longitude && 
+      user.latitude !== 0 && user.longitude !== 0 &&
+      !isNaN(user.latitude) && !isNaN(user.longitude) &&
+      user.latitude >= -90 && user.latitude <= 90 &&
+      user.longitude >= -180 && user.longitude <= 180
+    );
+
+    console.log('MapController - Toplam kullanıcı:', users.length);
+    console.log('MapController - Geçerli kullanıcı:', validUsers.length);
+    console.log('MapController - Kullanıcı koordinatları:', validUsers.map(u => [u.latitude, u.longitude]));
+
+    if (validUsers.length === 0) {
+      console.log('MapController - Geçerli kullanıcı yok, İstanbul\'da kal');
+      return;
+    }
+
     if (selectedUser) {
+      // Seçili kullanıcı varsa ona odaklan
+      console.log('MapController - Seçili kullanıcıya odaklan:', selectedUser.name);
       map.setView([selectedUser.latitude, selectedUser.longitude], 16, {
         animate: true,
         duration: 1
       });
-    } else if (users.length > 0) {
-      // Tüm kullanıcıları kapsayacak şekilde haritayı ayarla
-      const bounds = L.latLngBounds(
-        users.map(user => [user.latitude, user.longitude])
-      );
-      map.fitBounds(bounds, { padding: [20, 20] });
+    } else {
+      // Seçili kullanıcı yoksa aktif kullanıcılara odaklan
+      const activeUsers = validUsers.filter(user => user.isOnline);
+      console.log('MapController - Aktif kullanıcı sayısı:', activeUsers.length);
+      
+      if (activeUsers.length > 0) {
+        // Aktif kullanıcılar varsa onları kapsayacak şekilde ayarla
+        const bounds = L.latLngBounds(
+          activeUsers.map(user => [user.latitude, user.longitude])
+        );
+        console.log('MapController - Aktif kullanıcılara odaklan');
+        map.fitBounds(bounds, { 
+          padding: [30, 30],
+          maxZoom: 15
+        });
+      } else {
+        // Aktif kullanıcı yoksa tüm kullanıcıları kapsayacak şekilde ayarla
+        const bounds = L.latLngBounds(
+          validUsers.map(user => [user.latitude, user.longitude])
+        );
+        console.log('MapController - Tüm kullanıcılara odaklan');
+        map.fitBounds(bounds, { 
+          padding: [30, 30],
+          maxZoom: 12
+        });
+      }
     }
   }, [selectedUser, users, map]);
   
@@ -200,6 +252,20 @@ const MapController = ({ selectedUser, users }) => {
 const MapComponent = ({ users, selectedUser, onUserSelect }) => {
   const mapRef = useRef();
   const [address, setAddress] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const markerRefs = useRef({}); // Marker referanslarını sakla
+
+  // Harita başlangıçta İstanbul'da kalsın, kullanıcılar yüklenene kadar bekle
+  useEffect(() => {
+    if (users && users.length > 0) {
+      // Kullanıcılar yüklendiğinde 1 saniye bekle, sonra focus yap
+      const timer = setTimeout(() => {
+        setIsInitialized(true);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [users]);
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -256,7 +322,7 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
     return { text: batteryText, color: batteryColor };
   };
 
-  // Varsayılan harita merkezi (İstanbul)
+  // Sabit başlangıç merkezi (İstanbul)
   const defaultCenter = [41.0082, 28.9784];
   const defaultZoom = 10;
 
@@ -273,6 +339,18 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
     updateAddress();
   }, [selectedUser]);
 
+  // Seçili kullanıcı değiştiğinde popup'ı aç
+  useEffect(() => {
+    if (selectedUser && markerRefs.current[selectedUser.id]) {
+      const marker = markerRefs.current[selectedUser.id];
+      marker.openPopup();
+      
+      // Adres bilgisini al
+      getAddressFromCoordinates(selectedUser.latitude, selectedUser.longitude)
+        .then(addr => setAddress(addr));
+    }
+  }, [selectedUser]);
+
   return (
     <MapContainer
       center={defaultCenter}
@@ -285,13 +363,18 @@ const MapComponent = ({ users, selectedUser, onUserSelect }) => {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       
-      <MapController selectedUser={selectedUser} users={users} />
+      <MapController selectedUser={selectedUser} users={users} isInitialized={isInitialized} />
       
       {users.map((user) => (
         <Marker
           key={user.id}
           position={[user.latitude, user.longitude]}
           icon={createCustomIcon(user.isOnline, selectedUser?.id === user.id, user.name, user.batteryLevel)}
+          ref={(ref) => {
+            if (ref) {
+              markerRefs.current[user.id] = ref;
+            }
+          }}
           eventHandlers={{
             click: async () => {
               onUserSelect(user);

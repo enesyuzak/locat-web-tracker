@@ -5,6 +5,7 @@ import UserList from './components/UserList';
 import Header from './components/Header';
 import Login from './components/Login';
 import Profile from './components/Profile';
+import ResetPassword from './components/ResetPassword';
 import useAuth from './hooks/useAuth';
 import './index.css';
 import './components/Profile.css';
@@ -30,6 +31,18 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isRequestingLocations, setIsRequestingLocations] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+
+  // URL'de reset-password varsa modal'ı aç
+  useEffect(() => {
+    console.log('URL hash:', window.location.hash);
+    if (window.location.hash.includes('reset-password')) {
+      console.log('Reset password modal açılıyor...');
+      setShowResetPassword(true);
+      // URL'den hash'i temizle
+      window.history.replaceState(null, null, window.location.pathname);
+    }
+  }, []);
 
   // Konumları çek
   const fetchLocations = useCallback(async (forceRefresh = false) => {
@@ -503,7 +516,9 @@ function App() {
         onRefresh={() => fetchLocations(true)}
         loading={loading || isRequestingLocations}
         user={user}
-        onLogout={logout}
+        onLogout={async () => {
+          await logout();
+        }}
         onShowProfile={() => {
           console.log('Header\'dan showProfile çağrıldı');
           console.log('Önceki showProfile state:', showProfile);
@@ -545,7 +560,23 @@ function App() {
             console.log('Profile kapatılıyor');
             setShowProfile(false);
           }}
-          onLogout={logout}
+          onLogout={async () => {
+            await logout();
+          }}
+        />
+      )}
+
+      {/* Reset Password modal */}
+      {showResetPassword && (
+        <ResetPassword
+          onClose={() => {
+            console.log('Reset Password kapatılıyor');
+            setShowResetPassword(false);
+          }}
+          onSuccess={() => {
+            console.log('Şifre başarıyla değiştirildi');
+            // Başarılı şifre değişikliği sonrası yapılacak işlemler
+          }}
         />
       )}
     </div>

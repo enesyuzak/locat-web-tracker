@@ -17,6 +17,8 @@ const Login = ({ onLogin }) => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -141,6 +143,45 @@ const Login = ({ onLogin }) => {
     setSuccess('');
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    if (!resetEmail) {
+      setError('Email adresini girin');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Supabase email reset
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: window.location.origin + '/reset-password'
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSuccess('Şifre sıfırlama linki email adresinize gönderildi. Email\'inizi kontrol edin ve linke tıklayın.');
+      
+      setResetEmail('');
+      
+      // 10 saniye sonra login moduna geç
+      setTimeout(() => {
+        setIsForgotPasswordMode(false);
+        setSuccess('');
+      }, 10000);
+    } catch (err) {
+      console.error('Password reset error:', err);
+      setError('Şifre sıfırlama hatası. Lütfen daha sonra tekrar deneyin.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="login-container">
       <div className="login-background">
@@ -157,35 +198,68 @@ const Login = ({ onLogin }) => {
           <p>{isRegisterMode ? 'Yeni hesap oluşturun' : 'Konum takip sistemi yönetim paneli'}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={credentials.email}
-              onChange={handleChange}
-              required
-              placeholder="Email adresinizi girin"
-              disabled={loading}
-            />
-          </div>
+        {isForgotPasswordMode ? (
+          <form onSubmit={handleForgotPassword} className="login-form">
+            <div className="form-group">
+              <label htmlFor="resetEmail">Email</label>
+              <input
+                type="email"
+                id="resetEmail"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                required
+                placeholder="Email adresinizi girin"
+                disabled={loading}
+              />
+            </div>
+            
+            <button type="submit" className="login-button" disabled={loading}>
+              {loading ? 'Gönderiliyor...' : 'Şifre Sıfırlama Linki Gönder'}
+            </button>
+            
+            <button 
+              type="button" 
+              className="back-to-login" 
+              onClick={() => {
+                setIsForgotPasswordMode(false);
+                setResetEmail('');
+                setError('');
+                setSuccess('');
+              }}
+            >
+              ← Giriş Ekranına Dön
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="form-group">
+              <label htmlFor="email">Email</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={credentials.email}
+                onChange={handleChange}
+                required
+                placeholder="Email adresinizi girin"
+                disabled={loading}
+              />
+            </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Şifre</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={credentials.password}
-              onChange={handleChange}
-              required
-              placeholder={isRegisterMode ? "Şifrenizi oluşturun (min. 6 karakter)" : "Şifrenizi girin"}
-              disabled={loading}
-              minLength={isRegisterMode ? 6 : undefined}
-            />
-          </div>
+            <div className="form-group">
+              <label htmlFor="password">Şifre</label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                value={credentials.password}
+                onChange={handleChange}
+                required
+                placeholder={isRegisterMode ? "Şifrenizi oluşturun (min. 6 karakter)" : "Şifrenizi girin"}
+                disabled={loading}
+                minLength={isRegisterMode ? 6 : undefined}
+              />
+            </div>
 
           {isRegisterMode && (
             <div className="form-group">
@@ -233,6 +307,23 @@ const Login = ({ onLogin }) => {
             )}
           </button>
 
+          {!isRegisterMode && (
+            <div className="forgot-password">
+              <button 
+                type="button" 
+                className="forgot-password-button"
+                onClick={() => {
+                  setIsForgotPasswordMode(true);
+                  setError('');
+                  setSuccess('');
+                }}
+                disabled={loading}
+              >
+                Şifremi Unuttum
+              </button>
+            </div>
+          )}
+
           <div className="auth-toggle">
             <button 
               type="button" 
@@ -244,6 +335,7 @@ const Login = ({ onLogin }) => {
             </button>
           </div>
         </form>
+        )}
 
         <div className="login-footer">
           <div className="login-info">

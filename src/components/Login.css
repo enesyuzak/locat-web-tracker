@@ -192,6 +192,48 @@
   text-decoration: none;
 }
 
+.forgot-password {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.forgot-password-button {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.5rem;
+  transition: color 0.3s ease;
+}
+
+.forgot-password-button:hover {
+  color: #5a6fd8;
+}
+
+.forgot-password-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.back-to-login {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.back-to-login:hover {
+  background: #5a6268;
+}
+
 .login-button {
   width: 100%;
   padding: 1rem;

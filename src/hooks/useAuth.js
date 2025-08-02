@@ -113,10 +113,18 @@ const useAuth = () => {
     setUser(userData);
   };
 
-  const logout = () => {
-    localStorage.removeItem('locat_auth');
-    localStorage.removeItem('locat_auth_token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      // Supabase session'ını temizle
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // LocalStorage'ı temizle
+      localStorage.removeItem('locat_auth');
+      localStorage.removeItem('locat_auth_token');
+      setUser(null);
+    }
   };
 
   const isAuthenticated = () => {
