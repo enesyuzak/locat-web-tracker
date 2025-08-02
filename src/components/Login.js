@@ -125,6 +125,7 @@ const Login = ({ onLogin }) => {
           // LocalStorage'a kaydet
           localStorage.setItem('locat_auth', JSON.stringify(userData));
           localStorage.setItem('locat_auth_token', data.session.access_token);
+          localStorage.setItem('locat_auth_timestamp', Date.now().toString());
           
           onLogin(userData);
         }

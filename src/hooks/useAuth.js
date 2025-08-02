@@ -35,6 +35,60 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 });
 
+// localStorage utility fonksiyonları
+const AuthStorage = {
+  saveUser: (userData) => {
+    try {
+      localStorage.setItem('locat_auth', JSON.stringify(userData));
+      localStorage.setItem('locat_auth_token', userData.accessToken);
+      localStorage.setItem('locat_auth_timestamp', Date.now().toString());
+      console.log('User saved to localStorage:', userData);
+    } catch (error) {
+      console.error('Error saving user to localStorage:', error);
+    }
+  },
+  
+  getUser: () => {
+    try {
+      const authData = localStorage.getItem('locat_auth');
+      const authToken = localStorage.getItem('locat_auth_token');
+      const timestamp = localStorage.getItem('locat_auth_timestamp');
+      
+      if (authData && authToken && timestamp) {
+        const userData = JSON.parse(authData);
+        console.log('User retrieved from localStorage:', userData);
+        return userData;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user from localStorage:', error);
+      return null;
+    }
+  },
+  
+  clearUser: () => {
+    try {
+      localStorage.removeItem('locat_auth');
+      localStorage.removeItem('locat_auth_token');
+      localStorage.removeItem('locat_auth_timestamp');
+      console.log('User cleared from localStorage');
+    } catch (error) {
+      console.error('Error clearing user from localStorage:', error);
+    }
+  },
+  
+  isUserStored: () => {
+    try {
+      const authData = localStorage.getItem('locat_auth');
+      const authToken = localStorage.getItem('locat_auth_token');
+      return authData !== null && authToken !== null;
+    } catch (error) {
+      console.error('Error checking user storage:', error);
+      return false;
+    }
+  }
+};
+
 const useAuth = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,27 +112,24 @@ const useAuth = () => {
             refreshToken: session.refresh_token
           };
           
-          localStorage.setItem('locat_auth', JSON.stringify(userData));
-          localStorage.setItem('locat_auth_token', session.access_token);
+          AuthStorage.saveUser(userData);
           setUser(userData);
         } else if (event === 'SIGNED_OUT') {
-          // Sadece manuel logout durumunda localStorage'ı temizle
-          // Otomatik logout durumunda localStorage'ı koru
-          const isManualLogout = !localStorage.getItem('locat_auth');
-          if (isManualLogout) {
-            logout();
-          }
+          // Otomatik logout'u engelle - sadece manuel logout'ta temizle
+          console.log('SIGNED_OUT event detected, but keeping user logged in');
+          // localStorage'ı koru, kullanıcıyı logout yapma
         } else if (event === 'TOKEN_REFRESHED' && session) {
           // Token yenilendiğinde localStorage'ı güncelle
-          const existingUser = JSON.parse(localStorage.getItem('locat_auth') || '{}');
-          const updatedUser = {
-            ...existingUser,
-            accessToken: session.access_token,
-            refreshToken: session.refresh_token
-          };
-          localStorage.setItem('locat_auth', JSON.stringify(updatedUser));
-          localStorage.setItem('locat_auth_token', session.access_token);
-          setUser(updatedUser);
+          const existingUser = AuthStorage.getUser();
+          if (existingUser) {
+            const updatedUser = {
+              ...existingUser,
+              accessToken: session.access_token,
+              refreshToken: session.refresh_token
+            };
+            AuthStorage.saveUser(updatedUser);
+            setUser(updatedUser);
+          }
         }
         
         setLoading(false);
@@ -93,13 +144,12 @@ const useAuth = () => {
   const checkAuthStatus = async () => {
     try {
       // Önce localStorage'dan kontrol et (sınırsız session için)
-      const authData = localStorage.getItem('locat_auth');
-      const authToken = localStorage.getItem('locat_auth_token');
+      const storedUser = AuthStorage.getUser();
       
-      if (authData && authToken) {
+      if (storedUser) {
         // LocalStorage'da veri var, kullanıcıyı otomatik giriş yap
-        const userData = JSON.parse(authData);
-        setUser(userData);
+        console.log('User found in localStorage, auto-login:', storedUser);
+        setUser(storedUser);
         setLoading(false);
         return;
       }
@@ -126,8 +176,7 @@ const useAuth = () => {
           refreshToken: session.refresh_token
         };
         
-        localStorage.setItem('locat_auth', JSON.stringify(userData));
-        localStorage.setItem('locat_auth_token', session.access_token);
+        AuthStorage.saveUser(userData);
         setUser(userData);
       }
     } catch (error) {
@@ -139,6 +188,8 @@ const useAuth = () => {
   };
 
   const login = (userData) => {
+    // Login sırasında localStorage'a kaydet
+    AuthStorage.saveUser(userData);
     setUser(userData);
   };
 
@@ -150,14 +201,15 @@ const useAuth = () => {
       console.error('Logout error:', error);
     } finally {
       // LocalStorage'ı temizle
-      localStorage.removeItem('locat_auth');
-      localStorage.removeItem('locat_auth_token');
+      AuthStorage.clearUser();
       setUser(null);
     }
   };
 
   const isAuthenticated = () => {
-    return user !== null;
+    // Hem user state'ini hem de localStorage'ı kontrol et
+    const storedUser = AuthStorage.getUser();
+    return user !== null || storedUser !== null;
   };
 
   const hasRole = (role) => {

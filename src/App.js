@@ -527,8 +527,13 @@ function App() {
     );
   }
 
-  // Login required
-  if (!isAuthenticated()) {
+  // Login required - localStorage'dan da kontrol et
+  const authData = localStorage.getItem('locat_auth');
+  const authToken = localStorage.getItem('locat_auth_token');
+  const authTimestamp = localStorage.getItem('locat_auth_timestamp');
+  const isUserAuthenticated = isAuthenticated() || (authData !== null && authToken !== null && authTimestamp !== null);
+  
+  if (!isUserAuthenticated) {
     return <Login onLogin={login} />;
   }
 
